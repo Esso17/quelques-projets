@@ -28,12 +28,7 @@ void MonteCarlo(Statistique & res, RandomVariable & X, const Measurement & f, RN
         res+=f(X(G));
     }
     res/=double(n); //normalisation par le nombre d'échantillons
-    /* On remarquera les types de retour de G, X() et f(), 
-     * ainsi les types d'argument de X() et f() n'apparaissent pas !
-     * 
-     * Ainsi ce n'est qu'à l'instanciation des templates que les contraintes 
-     * de compatibilité et de conversion implicite sont vérifiées par le compilateur.
-     * */
+    
 };
 
 

@@ -30,19 +30,12 @@ class Stat2states {
 		long unsigned visit1;
 		long unsigned visit2;
 		long unsigned normalisation; 
-			/* l'idée derrière normalisation est de faire la division finale par n pour les moyennes qu'au 
-			 * moment des accesseurs et non avant. Cela est d'une part imposé par le fait que toutes les variables
-			 * sont entières et donc seule la division euclidienne est disponible. D'autre part, cela est un avantage
-			 * car il n'y a pas d'erreurs d'arrondi dans les entiers donc tout l'arrondi a lieu au dernier moment.
-			 * */
+			
 	public:
 		Stat2states(): visit1(0), visit2(0), normalisation(1) {}
 		void operator+=(int x) { if( x==1) visit1++; else visit2++; }
 		void operator/=(long unsigned n) { normalisation *= n;} 
-			/* tous les prototypes sont en fait imposés par le fait que Stat2states puisse
-			 * être utilisé comme premier argument dans MonteCarlo: il faut nécessairement += et /= avec les bons 
-			 * arguments
-			 *  */
+			
 		double frequency_of_visits(int x) const { 
 				if( x==1) return double(visit1)/double(normalisation); 
 				else return double(visit2)/double(normalisation); 

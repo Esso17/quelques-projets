@@ -15,14 +15,7 @@ void Histogramme::operator/=(double k) {
 	{
 		echantillon[i] /= k;
 	}
-	/* ou bien, pour les aficionados de <algorithm> (ce que je vous
-	 * encourage à devenir):
-	 * 		std::transform(
-	 * 			echantillon.begin(),echantillon.end(),
-	 * 			echantillon.begin(),
-	 * 			[k](double x) { return x/k; }
-	 * 		);
-	 * */
+	
 	return;
 }
 

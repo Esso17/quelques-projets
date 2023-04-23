@@ -17,12 +17,7 @@ class Chi2_distribution
 	public :
 		Chi2_distribution(): N(0.,1.) {}
 		template <class RNG> REAL operator()(RNG & G);
-		/* l'intérêt du template de méthode à l'intérieur du template
-		 * de classe est la possibilité de déclarer une variable de type
-		 * Chi2_distribution SANS DEVOIR immédiatement spécifier le type
-		 * de générateur: autant de méthodes que de générateurs utilisés 
-		 * seront compilées pour la même classe.
-		 * */
+		
 };
 
 template<class REAL,int k>
@@ -35,9 +30,9 @@ REAL Chi2_distribution<REAL,k>::operator()(RNG & G) {
 		x=N(G);
 		s+= x*x;
 		/* attention de ne pas remplacer les deux lignes par s+=N(G)*N(G) 
-		 * en croyant faire plus simple !!!
+		 * en croyant faire plus simple hihi parce que c'est aleatoire  !!!
 		 * */
 	}
 	return s;
 }
-#endif // CHI_HPP_INCLUDED
+#endif 
