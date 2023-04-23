@@ -1,0 +1,404 @@
+---
+title: "k_means"
+author: "Ake_Esso__Romain"
+date: '2022-04-08'
+output:
+  html_document:
+    highlight: haddock
+    toc: yes
+    number_sections: yes
+    toc_depth: 2
+    toc_float:
+      collapsed: no
+  pdf_document:
+    highlight: haddock
+    toc: yes
+    number_sections: yes
+papersize: a4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+librairies à importer :
+
+``` r
+library(NNTbiomarker)
+library(ggplot2)
+```
+
+# Intro
+
+L'algorithme k-means est un algorithme de clustering non supervisé et non hierarchique.\
+un algorithme non supervisé, est tel que les donnés ne sont pas étiquetés, c'est à dire que l'on ne connait pas de classement de données du même type, avant l'étude.\
+clustering non hierarchque signifie que l'on regroupe les données afin de maximiser ou de minimiser certains critères d'évaluation et que les groupes obtenus n'ont pas de contraintes entre eux.
+
+Le principe de l'algorithme est tres intuitif, il conciste à trouver des "centres", que l'on appel centroïdes, qui regroupent un ensemble de points, qui en sont le plus proches, créant ansi des des clusters.\
+La notion de distance doit donc être défini, en effet si on cherche un cluster de données non numériques, on devras les transformés pour qu'elles le deviennent et donc choisir une distance adéquoite (pour mieux représenter la similarité des donnés).\
+Généralement, pour k-means les distances utilisés sont : la distance euclidienne : $d(x_1,x_2)=||x_2-x_1||_2$ , ou la distance de manhatan : $d(x_1,x_2)=||x_2-x_1||_1$ , ici nous nous utiliserons la distance euclidienne.
+
+Pout cela il suffit de placer des centroides temporaires au hasard et d'affecter à chaque point celui qui en est le plus proche. Puis si ces points sont bien choisits, les centroides de chaque cluster doivent correspondre à leurs barrycentre, si tel n'est pas le cas, le barycentre devrait se rapprocher de là où les points sont le plus concentrés et donc de se rapprocher des vrai centroides que l'on cherche.
+
+# fonctionnement de l'algorithme :
+
+On note $S=(x_1,..,x_n)$ les n éléments dont on cherche les $K$ clusters, $C_i$ le $i^{ieme}$ cluster et $k_i$ le $i^{eme}$ centroides .
+
+on commence par initialiser les $K$ premiers centroides aléatoirement dans $S$
+
+puis on itère les étapes suivantes, jusqu'à ce que les groupes se stabilisent :
+
+-   $\forall i\in${$1,…,n$} $C_i$=$\{ x_j$ tel que $\underset{k_j=k_1,...,k_K}{argmin}(d(x_j,k_j))=k_i\}$
+
+-   $\forall i\in${$1,…,K$}, $k_i=\overline{C_i}$ où $\overline{C_i}=\frac{1}{Card(C_i)}\underset{x\in C_i}{\sum}x$
+
+## implémentation de l'algorithme
+
+mis à part la fonction d'affichage, l'ensemble des fonctions implémentés sont faites de façon à supporter des points dans $R^n$
+
+### distances :
+
+on est libre de choisir une distance, qui soit en adéquoition avec le probleme traité. Pour l'exemple on utiliseras la distance euclidienne:
+
+``` r
+distance=function(p1,p2)
+{
+  apply(p2-p1,1, function(x){sqrt(sum(x*x))})
+}
+```
+
+cette fonction sera ammenée à etre utilisée sur des ensembles de points, c'est pour cela que les arguments doivent etre passsés sous forme de matrice, où les colonnes représentent les coordonnés de chaque points (ce code fonctionne pour des points dans Rn)
+
+### Initialisation des centroides
+
+``` r
+set_centroide=function(k,data)
+{
+  n=nrow(data)
+  u=sample(1:n,k,replace = FALSE)
+  return(data[u,])
+}
+```
+
+Cette fonction est celle qui initialiseras les premiers centroides, pour cela elle a besoin de 2 arguments: **k**, le nombre de centroides souhaités et **data** un data.frame, dont la ligne i correspond a la coordonné du i ème point.
+
+### Assigné à chaque points son centroïdes
+
+pour pouvoir créer les différents cluster, il faut être capable de connaitre la distance qui sépare le point de chaque cluster, puis dans un second temps de l'assigné au centroide le plus proche.\
+On introduit donc les deux fonctions suivantes :
+
+``` r
+distance_clust=function(centroides,data)
+{
+  n_data=nrow(data)
+  n_centro=nrow(centroides)
+  sapply(1:n_centro,function(p)
+                  {
+                    centre=t( replicate(n_data,as.double(centroides[p,])) )
+                    return(distance(centre,data))
+                  })
+}
+```
+
+Cette fonction prend en arguments, les coordonnées des centroides et data le data.frame des données et renvoi une matrice M, de taille nxm, avec n le nombre de points dans les données et m le nombre de centroides, M(i,j) représente la distance entre le ième point et le jème cluster.
+
+Pour assigné un centroide à un point il suffiras donc de prendre l'argmin de chaque lignes de la matrice renvoyée par distance_clust.\
+Avec le package NNTbiomarker, un problème se pose quand deux points sont équidistants de deux centroides, alors argmin renvoi 2 valeurs, ce qui pose problème.\
+pour régler ce problème, on introduit :
+
+``` r
+argmin_if=function(u)
+{
+  v=argmin(u)
+  if(length(v)>1)
+    return(v[1])
+  else
+    return(v)
+}
+```
+
+On peut maintenant renvoyer le cluster assigné à un centroide :
+
+``` r
+give_cluster=function(i,data,centroide)
+{
+  d=distance_clust(centroide, data)
+  in_=apply(d,1, argmin_if)
+  return(data[in_==i,])
+}
+```
+
+i représente le centroide duquel on souhaite extraire le cluster, data les données et centroides l'ensemble des centroides (on est obligé de fournir l'ensemble des centroides concidérés pour assigné les points)
+
+### Calculer les nouveaux centroides
+
+La dernière chose à faire dans l'algo est de calculer les nouveaux centroides, pour cela, il suffit de calculé la moyenne par coordonné de tout les point présent dans chaque cluster.
+
+``` r
+new_centroides=function(centroides,data)
+{
+  k=nrow(centroides)
+  t(sapply(1:k, function(i){apply(give_cluster(i,data,centroides),2,mean)}))
+}
+```
+
+## k-Means
+
+on a maintenant tout les outils pour implémenter k-means.\
+On a décider de renvoyer les centroides finaux, c'est à dire les centroides stables, puisque les clusters associés peuvent être retrouvés à l'aide de give_cluster, vu précedement.
+
+Concernant la condition d'arret, on a décider d'arreter l'algorithme apres 100 itérations, ce qui est amplement sufisant si il existe des cluster et quand la distance entre les anciens centroides et les nouveaux deviens nul, ce qui reviens à dire que ces derniers ne bougent plus. La condition d'arret porte sur une comparaison de vecteurs, on a donc utiliser all.equal (et non identiqual), car all.equal prend en compte les erreurs d'arrondies.
+
+``` r
+k_means=function(k,data)
+{
+  centres=set_centroide(k,data)
+  N=0
+  while((all.equal(as.double (distance( new_centroides(centres,data),centres )) , numeric(k))!=TRUE)&(N<1e2))
+  {
+    centres=new_centroides(centres,data)
+    N=N+1
+  }
+  return(list (centroides=centres, iterations=N))
+}
+```
+
+### fonction d'affichage
+
+si on veut pouvoir visualser les cluster on peut implémenter une fonction d'affichage :
+
+``` r
+plot_cluster=function(centroides, data)
+{
+  name_x=names(data)[1]
+  name_y=names(data)[2]
+  data_plot=data.frame(data)
+  names(data_plot)=c("X","Y")
+  
+  centroides_plot=as.data.frame(centroides)
+  names(centroides_plot)=c("X","Y")
+  
+  d=distance_clust(centroides_plot, data_plot)
+  in_=apply(d,1, argmin)
+  print=cbind(data_plot,in_)
+  clusters=as.factor(in_)
+  plt<-ggplot(NULL, aes(x=X,y=Y))+
+      geom_point(data=print, aes(colour=clusters),shape=19,size=5)+
+      geom_point(data=centroides_plot, aes(colour="Centroides"), shape=17, size=6)
+  
+  plt+labs(title="clustering obtenu par k-means", x =name_x, y = name_y)+
+      theme(plot.title = element_text(color="#993333", size=14, face="bold.italic"),
+            axis.title.x = element_text(size=14, face="bold"),
+            axis.title.y = element_text(size=14, face="bold")
+            )
+}
+```
+
+par exemple :
+
+```{r}
+library(NNTbiomarker)
+library(ggplot2)
+
+Data_iris=data.frame(iris$Sepal.Width,iris$Sepal.Length)
+
+distance=function(p1,p2)
+{
+  apply(p2-p1,1, function(x){sqrt(sum(x*x))})
+}
+
+set_centroide=function(k,data)
+{
+  n=nrow(data)
+  u=sample(1:n,k,replace = FALSE)
+  return(data[u,])
+}
+
+distance_clust=function(centroides,data)
+{
+  n_data=nrow(data)
+  n_centro=nrow(centroides)
+  sapply(1:n_centro,function(p)
+                  {
+                    centre=t( replicate(n_data,as.double(centroides[p,])) )
+                    return(distance(centre,data))
+                  })
+}
+
+argmin_if=function(u)
+{
+  v=argmin(u)
+  if(length(v)>1)
+    return(v[1])
+  else
+    return(v)
+}
+
+give_cluster=function(i,data,centroide)
+{
+  d=distance_clust(centroide, data)
+  in_=apply(d,1, argmin_if)
+  return(data[in_==i,])
+}
+
+new_centroides=function(centroides,data)
+{
+  k=nrow(centroides)
+  t(sapply(1:k, function(i){apply(give_cluster(i,data,centroides),2,mean)}))
+}
+
+k_means=function(k,data)
+{
+  centres=set_centroide(k,data)
+  N=0
+  while((all.equal(as.double (distance( new_centroides(centres,data),centres )) , numeric(k))!=TRUE)&(N<1e2))
+  {
+    centres=new_centroides(centres,data)
+    N=N+1
+  }
+  return(list (centroides=centres, iterations=N))
+}
+
+plot_cluster=function(centroides, data)
+{
+  name_x=names(data)[1]
+  name_y=names(data)[2]
+  data_plot=data.frame(data)
+  names(data_plot)=c("X","Y")
+  
+  centroides_plot=as.data.frame(centroides)
+  names(centroides_plot)=c("X","Y")
+  
+  d=distance_clust(centroides_plot, data_plot)
+  in_=apply(d,1, argmin)
+  print=cbind(data_plot,in_)
+  clusters=as.factor(in_)
+  plt<-ggplot(NULL, aes(x=X,y=Y))+
+      geom_point(data=print, aes(colour=clusters),shape=19,size=5)+
+      geom_point(data=centroides_plot, aes(colour="Centroides"), shape=17, size=6)
+  
+  plt+labs(title="clustering obtenu par k-means", x =name_x, y = name_y)+
+      theme(plot.title = element_text(color="#993333", size=14, face="bold.italic"),
+            axis.title.x = element_text(size=14, face="bold"),
+            axis.title.y = element_text(size=14, face="bold")
+            )
+}
+
+plot_cluster(k_means(2,Data_iris)$centroides,Data_iris)
+```
+
+# Comment estimer le nombre de cluster a priori ?
+
+Pour estimer le nombre de cluster à considerer, pour un jeux de donnés n'est pas simple et il n'existe pas de formule qui donne le meilleur $K$ à considerer.\
+On peut donc procéder de differentes facons :\
+si on a acces visuellement aux donnés, l'intuition reste une bonne approche, puis on peut par la suite étudier la variance de chaque cluster en faisant varier le $K$ autour de la valeur choisit pour se convaincre de notre choix.\
+La méthode la plus utilisée s'appelle "elbow", elle consiste à observer la moyenne de la variance de la distance entre chaque point et son centroide, pour chaque $K$.\
+Notons que la variance tend nécessairement vers $0$, en considerant $n$ clusters, $n$ étant le nombre de points. Il ne faut donc pas essayer de minimiser la variance, mais regarder quand elle chute brutalement.\
+généralement les variances forment un espece de coude, d'ou ne nom de la méthode, et c'est à ce "coude" qu'on attriburas le nombre de clusters à choisir.
+
+Regardons ce sue cela donne sur un exemple :
+
+## méthode elbow
+
+pour implémenter la méthode elbow on auras besoins de calculer la variance, on definit ici la variance de notre systeme, la moyenne des variances, de la distance au centroïde, au sein de chaque cluster.
+
+``` r
+variance_cluster=function(data, centroides)
+{
+  k=nrow(centroides)
+  somme=numeric(k)
+  for (i in 1:k){
+    cluster=give_cluster(i,data,centroides)
+    n=nrow(cluster)
+    centroide_=t(replicate(n,centroides[i,]))
+    somme[i]=mean(distance(cluster, centroide_)**2)
+  }
+  return(mean(somme))
+}
+```
+
+Et enfin, nous avons la méthode elbow :
+
+``` r
+elbow=function(b, data) 
+{ 
+  variance=numeric(b)
+  for( i in 1:b)
+  {
+    Z=k_means(i,data)$centroides
+    variance[i]=variance_cluster(data,Z)
+  }
+################ affichage #################################################
+  var_plot=data.frame(variance,1:b)
+  names(var_plot)=c("variance","nb_clusters")
+  plot<-ggplot(data = var_plot,aes(x=nb_clusters,y=variance))+
+        geom_line(size=1, col="red")+geom_point(size=4)
+  plot+labs(title="méthode elbow : \n 
+            évolution de la variance en fonction du nombre de cluster",
+            x ="nombre de clusters", y = "variance")+
+  theme(plot.title = element_text(color="#993333", size=14, face="bold.italic"),
+        axis.title.x = element_text(size=14, face="bold"),
+        axis.title.y = element_text(size=14, face="bold")
+        )
+############################################################################
+}
+```
+
+### Exemple
+
+implémentons la méthode elbow sur le jeux de données suivant :
+
+```{r}
+
+data=read.csv("C:/Users/Essodestiny/Documents/datasets/Mall_Customers.csv")
+data=data[,4:5]
+plot(data,main="dépenses en fonction du salaire annuel",xlab('salaire annuel'), ylab('dépenses'))
+```
+
+```{r}
+variance_cluster=function(data, centroides)
+{
+  k=nrow(centroides)
+  somme=numeric(k)
+  for (i in 1:k){
+    cluster=give_cluster(i,data,centroides)
+    n=nrow(cluster)
+    centroide_=t(replicate(n,centroides[i,]))
+    somme[i]=mean(distance(cluster, centroide_)**2)
+  }
+  return(mean(somme))
+}
+
+elbow=function(b, data) 
+{ 
+  variance=numeric(b)
+  for( i in 1:b)
+  {
+    Z=k_means(i,data)$centroides
+    variance[i]=variance_cluster(data,Z)
+  }
+  
+  var_plot=data.frame(variance,1:b)
+  names(var_plot)=c("variance","nb_clusters")
+  plot<-ggplot(data = var_plot,aes(x=nb_clusters,y=variance))+
+        geom_line(size=1, col="red")+geom_point(size=4)
+  plot+labs(title="méthode elbow : \n 
+            évolution de la variance en fonction du nombre de cluster",
+            x ="nombre de clusters", y = "variance")+
+  theme(plot.title = element_text(color="#993333", size=14, face="bold.italic"),
+        axis.title.x = element_text(size=14, face="bold"),
+        axis.title.y = element_text(size=14, face="bold")
+        )
+}
+
+elbow(5,data)
+```
+
+# problèmes de cette méthode
+
+elle est relativement inéficace si les cluster sont tres proches\
+le "groupe stable" n'est pas unique, et dépende des clusters initiaux. Ces derniers étants aléatoires, le clustering obtenu n'est pas toujours le plus optimal !
+
+Avec notre méthode, si un cluster contient la pluspart des points, les autres clusters n'aurons pas asser de poid pour décaller sufisament les centroides, et donc la plus part du temps les centroides seront initalisés dans le même cluster et y resterons. ==\>probleme.
+
+(une idée pour palié à cela serait de refaire tourner le programe en initialisant les centroides dans chaque cluster précedement déterminés, si ces dernier sont de "vrai" cluster, ils devraient redonner les mêmes)
